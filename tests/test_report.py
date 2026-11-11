@@ -88,3 +88,29 @@ def test_send_message_skips_login_without_credentials():
         report.send_message(EmailMessage(), "localhost", 25, None, None)
 
     server.login.assert_not_called()
+
+
+def test_format_text_lists_new_lookalikes():
+    summary = summarize("example.com", VARIANTS)
+    summary["new"], summary["baseline"] = ["exampl.com"], False
+
+    text = report.format_text(summary)
+
+    assert "New since the last scan: 1" in text
+    assert "  exampl.com\n" in text
+
+
+def test_format_text_explains_a_baseline_scan():
+    summary = summarize("example.com", VARIANTS)
+    summary["new"], summary["baseline"] = [], True
+
+    assert "baseline recorded" in report.format_text(summary)
+
+
+def test_alert_subject_counts_new_lookalikes():
+    summary = summarize("example.com", VARIANTS)
+    summary["new"], summary["baseline"] = ["exampl.com", "exampel.com"], False
+
+    message = report.build_message(summary, "bot@example.org", "me@example.org")
+
+    assert message["Subject"] == "Typosquatting alert: 2 new look-alike(s) of example.com"

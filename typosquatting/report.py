@@ -20,9 +20,13 @@ def format_text(summary: dict[str, Any]) -> str:
     lines = [
         f"Typosquatting report for {summary['domain']}",
         f"Registered look-alike domains: {summary['registered_count']}",
-        "",
-        "By technique:",
     ]
+    if summary.get("baseline"):
+        lines.append("First scan of this domain: baseline recorded, nothing to compare with yet.")
+    elif "new" in summary:
+        lines.append(f"New since the last scan: {len(summary['new'])}")
+        lines += [f"  {name}" for name in summary["new"]]
+    lines += ["", "By technique:"]
     lines += [f"  {name}: {count}" for name, count in summary["by_technique"].items()] or ["  (none)"]
 
     for metric, entries in summary["closest"].items():
@@ -35,7 +39,11 @@ def format_text(summary: dict[str, Any]) -> str:
 def build_message(summary: dict[str, Any], sender: str, recipient: str) -> EmailMessage:
     """E-mail with the text report in the body and the full results as JSON attached."""
     message = EmailMessage()
-    message["Subject"] = f"Typosquatting report: {summary['domain']}"
+    new = summary.get("new")
+    if new:
+        message["Subject"] = f"Typosquatting alert: {len(new)} new look-alike(s) of {summary['domain']}"
+    else:
+        message["Subject"] = f"Typosquatting report: {summary['domain']}"
     message["From"] = sender
     message["To"] = recipient
     message.set_content(format_text(summary))
