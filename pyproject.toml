@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "typosquatting-detector"
-version = "0.2.0"
+version = "0.3.0"
 description = "Find registered look-alike (typosquatting) domains with dnstwist."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,9 @@ typosquatting = "typosquatting.cli:main"
 
 [tool.setuptools]
 packages = ["typosquatting"]
+
+[tool.setuptools.package-data]
+typosquatting = ["data/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -11,12 +11,14 @@ The scanner generates look-alike variants (typos, homoglyphs, TLD swaps, bit fli
 
 We do not write our own permutation engine. dnstwist already generates the variants and checks which ones resolve in DNS, so the project focuses on what happens after that:
 
-1. **Generate** look-alikes of the protected domain with dnstwist's 15+ techniques.
-2. **Filter** to the variants that have a DNS record (A, AAAA, MX or NS). Most generated names are not registered, so this step removes most of the noise.
-3. **Compare content** of each registered variant with the original site:
+1. **Generate** look-alikes of the protected domain with dnstwist's 15+ techniques. `--combo` / `--dictionary` add names built from the brand plus a word (`example-login.com`), and `--ct` adds names found in certificate logs, which permutations cannot guess.
+2. **Filter** to the variants that have a DNS record (A, AAAA, MX or NS). Most generated names are not registered, so this step removes most of the noise. An allowlist removes your own legitimate domains.
+3. **Judge** each registered variant:
    - `--lsh` fetches the HTML and compares it with a fuzzy hash (TLSH or ssdeep). It finds pages that copy the original's layout or text even when the bytes differ.
    - `--phash` renders each page in a headless browser and compares screenshots. It finds clones that look identical to a visitor even when the HTML is different.
-4. **Report** the counts per technique and the closest look-alikes, as text, JSON or e-mail.
+   - `--enrich` looks up when the domain was registered. A domain registered last week is more suspicious than one registered ten years ago.
+   - A risk score combines these signals with the presence of a mail server, and says why.
+4. **Alert** on what changed: with `--state`, only new look-alikes are reported, by text, JSON or e-mail.
 
 ### Techniques covered
 
@@ -68,7 +70,22 @@ python3 -m typosquatting example.com --lsh tlsh -o results.json --limit 10
 
 # Scan several domains in one run (a failing domain does not stop the others)
 python3 -m typosquatting example.com example.org
+
+# Rank by risk: registration dates, brand-plus-word names, certificate logs, own domains ignored
+python3 -m typosquatting example.com --enrich --combo --ct --allow example.org --allow-file mine.txt
 ```
+
+| Option | What it does |
+| --- | --- |
+| `--combo` | also tries the domain combined with common words (`login`, `secure`, `support`, ...); the list is in `typosquatting/data/combo-words.txt` |
+| `--dictionary FILE` | same, with your own word list (one word per line) |
+| `--ct` | adds names that got a TLS certificate and contain the brand, from [crt.sh](https://crt.sh) |
+| `--allow DOMAIN` | ignores a legitimate domain and its subdomains (repeatable) |
+| `--allow-file FILE` | same, one domain per line; `#` starts a comment |
+| `--enrich` | looks up each look-alike's registration date through RDAP |
+| `--lsh tlsh\|ssdeep`, `--phash` | compares content or screenshots with the original |
+| `--threads N` | parallel workers; lower it with `--phash` to save memory |
+| `--limit N` | entries per section of the report (default 5) |
 
 ### Watching for new look-alikes
 
@@ -106,11 +123,31 @@ Each registered variant has the fields returned by dnstwist (`domain`, `fuzzer`,
 
 - the number of registered look-alikes and how many come from each technique;
 - with `--state`, the look-alikes that are new since the last scan;
+- the look-alikes with the highest risk score, each with the reasons for its score;
 - the closest look-alikes for each similarity metric that was measured.
 
-The JSON file written by `-o` is a list with one summary per scanned domain.
+The JSON file written by `-o` is a list with one summary per scanned domain. Every variant carries its `risk_score` and `risk_reasons`, and `registered` / `age_days` when `--enrich` was used.
 
-Scores: `tlsh`, `ssdeep` and `phash` are similarity percentages from 0 (no similarity) to 100 (identical). Higher is closer; variants scoring 0 are not listed.
+Similarity scores: `tlsh`, `ssdeep` and `phash` are percentages from 0 (no similarity) to 100 (identical). Higher is closer; variants scoring 0 are not listed.
+
+### Risk score
+
+The score is a sum of points, each with a stated reason. The weights are judgement calls, not measured values: they have not been checked against a set of confirmed phishing domains, so treat the score as a way to sort a long list, not as a verdict.
+
+| Signal | Points |
+| --- | --- |
+| Registered less than 30 / 90 / 365 days ago (`--enrich`) | 3 / 2 / 1 |
+| Has an MX record (can send and receive e-mail) | 2 |
+| Best content similarity of 70% or more / 40% or more / above 0 (`--lsh`, `--phash`) | 3 / 2 / 1 |
+| Homoglyph or Cyrillic characters | 1 |
+| Found in certificate logs (`--ct`) | 2 |
+
+## Limitations
+
+- **Registered does not mean malicious.** Many look-alikes are parked or bought defensively by the brand owner. The score helps to sort them; a person still decides.
+- **`--ct` depends on crt.sh**, a free service that is often slow or unavailable and that times out on very common brand names (for example `paypal`). When it fails, the scan continues without it and logs a warning. It only keeps names whose own domain contains the brand: a phishing page hosted as `login.example.evil.com` is not found.
+- **`--enrich` depends on the public RDAP gateway**, which refuses fast queries and has no record for some extensions. On a test scan of 129 look-alikes it dated about half of them in under two minutes. Undated domains simply get no age points.
+- **The permutation approach only finds names it can generate.** Certificate logs and word lists widen the search, but a look-alike unrelated to the brand's spelling (a different word, a translation) is out of reach.
 
 ## Tests
 
@@ -126,10 +163,15 @@ The tests replace dnstwist and SMTP with fakes, so they run offline. The same su
 ```
 typosquatting/
   scanner.py   # dnstwist wrapper and registered-domain filter
-  metrics.py   # counts per technique and closest look-alikes
+  ct.py        # look-alikes found in certificate logs (crt.sh)
+  filters.py   # allowlist of legitimate domains
+  enrich.py    # registration dates through RDAP
+  risk.py      # risk score with reasons
+  metrics.py   # counts per technique, closest and riskiest look-alikes
   report.py    # text report, e-mail message and SMTP sending
   state.py     # known look-alikes, to report only new ones
   cli.py       # command-line interface
+  data/        # word list for --combo
 tests/         # unit tests (offline)
 Dockerfile     # image with Chromium, TLSH and ssdeep support
 pyproject.toml # packaging and the `typosquatting` command

@@ -26,13 +26,21 @@ def is_registered(variant: dict) -> bool:
 class Scanner:
     """Run dnstwist on a domain and return its registered look-alike domains."""
 
-    def __init__(self, lsh: Optional[str] = None, phash: bool = False, threads: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        lsh: Optional[str] = None,
+        phash: bool = False,
+        threads: Optional[int] = None,
+        dictionary: Optional[str] = None,
+    ) -> None:
         if lsh is not None and lsh not in LSH_METHODS:
             raise ValueError(f"lsh must be one of {LSH_METHODS}, got {lsh!r}")
         self.lsh = lsh
         self.phash = phash
         # --phash starts one browser per thread, so the thread count bounds memory use.
         self.threads = threads
+        # Word list that dnstwist combines with the domain (login, secure, ...).
+        self.dictionary = dictionary
 
     def scan(self, domain: str) -> list[dict]:
         options = {"domain": domain, "format": "json", "registered": True}
@@ -42,6 +50,8 @@ class Scanner:
             options["phash"] = True
         if self.threads:
             options["threads"] = self.threads
+        if self.dictionary:
+            options["dictionary"] = str(self.dictionary)
 
         logger.info("Scanning %s (lsh=%s, phash=%s)", domain, self.lsh, self.phash)
         try:

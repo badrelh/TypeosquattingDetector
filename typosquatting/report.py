@@ -26,6 +26,10 @@ def format_text(summary: dict[str, Any]) -> str:
     elif "new" in summary:
         lines.append(f"New since the last scan: {len(summary['new'])}")
         lines += [f"  {name}" for name in summary["new"]]
+    if summary.get("riskiest"):
+        lines += ["", "Highest risk (heuristic score, see README):"]
+        for entry in summary["riskiest"]:
+            lines.append(f"  {entry['domain']} (score {entry['score']}): {'; '.join(entry['reasons'])}")
     lines += ["", "By technique:"]
     lines += [f"  {name}: {count}" for name, count in summary["by_technique"].items()] or ["  (none)"]
 
