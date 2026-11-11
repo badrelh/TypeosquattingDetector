@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "typosquatting-detector"
+version = "0.2.0"
+description = "Find registered look-alike (typosquatting) domains with dnstwist."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["dnstwist==20250130", "dnspython>=2.4"]
+
+[project.optional-dependencies]
+full = ["selenium>=4.20", "pillow>=10", "py-tlsh>=4.7", "ppdeep>=20250101"]
+test = ["pytest"]
+
+[project.scripts]
+typosquatting = "typosquatting.cli:main"
+
+[tool.setuptools]
+packages = ["typosquatting"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

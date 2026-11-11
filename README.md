@@ -39,9 +39,11 @@ We do not write our own permutation engine. dnstwist already generates the varia
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt          # dnstwist only: permutations and DNS checks
-pip install -r requirements-full.txt     # adds Selenium, Pillow, TLSH and ppdeep for --lsh and --phash
+pip install .                            # dnstwist only: permutations and DNS checks
+pip install ".[full]"                    # adds Selenium, Pillow, TLSH and ppdeep for --lsh and --phash
 ```
+
+This installs a `typosquatting` command; `python3 -m typosquatting` works too.
 
 `--phash` also needs Chromium and a matching `chromedriver` on the `PATH`. If they are missing, dnstwist exits with a message from argparse and the CLI reports it as an error.
 
@@ -63,7 +65,24 @@ python3 -m typosquatting example.com --lsh tlsh
 
 # Save all results to JSON, keeping the 10 closest per metric in the text report
 python3 -m typosquatting example.com --lsh tlsh -o results.json --limit 10
+
+# Scan several domains in one run (a failing domain does not stop the others)
+python3 -m typosquatting example.com example.org
 ```
+
+### Watching for new look-alikes
+
+A one-off scan lists every registered look-alike, which is a long list that rarely changes. To be alerted only when a **new** one appears, give the scan a state file:
+
+```bash
+python3 -m typosquatting example.com example.org --state state.json --email-to security@example.com
+```
+
+- The first run only records a baseline in `state.json`; it reports nothing as new and sends no e-mail.
+- Later runs list the look-alikes not seen before, and an e-mail is sent only when there are some.
+- A look-alike that disappears and comes back is not reported twice: the state keeps every name ever seen.
+
+Run it on a schedule, for example every day with cron (`0 7 * * * cd /path/to/project && python3 -m typosquatting example.com --state state.json --email-to ...`).
 
 ### Sending the report by e-mail
 
@@ -79,25 +98,28 @@ export TYPOSQUAT_SMTP_FROM=you@gmail.com
 python3 -m typosquatting example.com --email-to security@example.com
 ```
 
-The e-mail contains the text report in the body and the full results as a JSON attachment.
+The e-mail contains the text report in the body and the full results as a JSON attachment. With `--state`, the subject reads `Typosquatting alert: N new look-alike(s) of <domain>`.
 
 ## Output
 
 Each registered variant has the fields returned by dnstwist (`domain`, `fuzzer`, `dns_a`, `dns_aaaa`, `dns_mx`, `dns_ns`, and `tlsh` / `ssdeep` / `phash` when requested). The text report shows:
 
 - the number of registered look-alikes and how many come from each technique;
+- with `--state`, the look-alikes that are new since the last scan;
 - the closest look-alikes for each similarity metric that was measured.
+
+The JSON file written by `-o` is a list with one summary per scanned domain.
 
 Scores: `tlsh`, `ssdeep` and `phash` are similarity percentages from 0 (no similarity) to 100 (identical). Higher is closer; variants scoring 0 are not listed.
 
 ## Tests
 
 ```bash
-pip install pytest
+pip install -e ".[test]"
 python3 -m pytest
 ```
 
-The tests replace dnstwist and SMTP with fakes, so they run offline.
+The tests replace dnstwist and SMTP with fakes, so they run offline. The same suite runs on every push and pull request through GitHub Actions.
 
 ## Project layout
 
@@ -106,9 +128,11 @@ typosquatting/
   scanner.py   # dnstwist wrapper and registered-domain filter
   metrics.py   # counts per technique and closest look-alikes
   report.py    # text report, e-mail message and SMTP sending
+  state.py     # known look-alikes, to report only new ones
   cli.py       # command-line interface
 tests/         # unit tests (offline)
 Dockerfile     # image with Chromium, TLSH and ssdeep support
+pyproject.toml # packaging and the `typosquatting` command
 ```
 
 ## Authors
