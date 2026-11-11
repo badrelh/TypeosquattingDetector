@@ -29,5 +29,16 @@ def summarize(domain: str, variants: list[dict], limit: int = 5) -> dict[str, An
             for metric in SIMILARITY_KEYS
             if any(v.get(metric) is not None for v in variants)
         },
+        "riskiest": riskiest(variants, limit),
         "variants": variants,
     }
+
+
+def riskiest(variants: list[dict], limit: int = 5) -> list[dict]:
+    """The look-alikes with the highest risk score, with the reasons for it."""
+    scored = [v for v in variants if v.get("risk_score")]
+    scored.sort(key=lambda v: v["risk_score"], reverse=True)
+    return [
+        {"domain": v["domain"], "score": v["risk_score"], "reasons": v.get("risk_reasons", [])}
+        for v in scored[:limit]
+    ]
