@@ -1,0 +1,5 @@
+-r requirements.txt
+selenium>=4.20
+pillow>=10
+py-tlsh>=4.7
+ppdeep>=20250101
